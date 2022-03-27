@@ -8,6 +8,10 @@ const token = '5089950192:AAHi1skUKb7DBzSffl9SL6No5LqEjkoFvls'
 
 const bot = new TelegramApi(token, {polling: true})
 
+const botSendMessage = async(chat_id, msgText) => {
+    await bot.sendMessage(msg.chat.id, `Что-то пошло не так! Вы уже зарегистрированны!`)
+}
+
 bot.onText(/\/start/, async (msg, match) => {
     console.log('TgBOT /start command is responsed ')
     await bot.sendMessage(msg.chat.id, 'Здравствуйте!\n' +

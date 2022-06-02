@@ -4,18 +4,18 @@ const cors = require('cors')
 const TelegramApi = require('node-telegram-bot-api')
 const db = require('./db')
 
-const token = '5089950192:AAHi1skUKb7DBzSffl9SL6No5LqEjkoFvls'
+const token = '5591974267:AAGbyDDu5IiFU07wkxxDOcfTTPhPcBlF2SI'
 
 const bot = new TelegramApi(token, {polling: true})
 
-const botSendMessage = async(chat_id, msgText) => {
-    await bot.sendMessage(msg.chat.id, `Что-то пошло не так! Вы уже зарегистрированны!`)
+function botSendMessage(chat_id, msgText){
+    bot.sendMessage(chat_id, msgText) 
 }
 
 bot.onText(/\/start/, async (msg, match) => {
     console.log('TgBOT /start command is responsed ')
     await bot.sendMessage(msg.chat.id, 'Здравствуйте!\n' +
-        'Qalai Notification Bot служит оповестителем всех взаимодействий пользователей платформы.\n\n' +
+        'Order Admin Bot служит оповестителем всех взаимодействий пользователей платформы.\n\n' +
         'Для того чтобы начать получать оповещения вам нужно пройти регистрацию. Команда для регистрации - /register.')
 })
 bot.onText(/\/register/, async (msg, match) => {
@@ -43,3 +43,5 @@ app.use(express.json())
 app.use(routes)
 
 app.listen(PORT, ()=>console.log('server started on port: ' + PORT))
+
+module.exports = botSendMessage;

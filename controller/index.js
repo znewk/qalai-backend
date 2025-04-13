@@ -1,76 +1,154 @@
-const db = require('../db')
-const TelegramApi = require("node-telegram-bot-api");
-const e = require("express");
+const { pool } = require('../db');
 
-const token = '5591974267:AAGbyDDu5IiFU07wkxxDOcfTTPhPcBlF2SI'
-
-const bot = new TelegramApi(token, {polling: false})
-
-class Controller {
-    async createNewApplication(req, res) {
-        const application = {
-            name: req.body.name,
-            phone: req.body.phone,
-            type: req.body.type,
-            typeOfNewFurniture: req.body.typeOfNewFurniture,
-            typeOfRestFurniture: req.body.typeOfRestFurniture,
-            sleepingPlaceSize: req.body.sleepingPlaceSize ? req.body.sleepingPlaceSize : false
-        }
-        console.log(req.body)
-        const tgAdmins = await db.query('SELECT id, chat_id, username FROM public.tg_admins;')
-
-
-        tgAdmins.rows.map(async (admin) => (
-            await bot.sendMessage(admin.chat_id,
-                `Новая заявка!\n\nВыбранная услуга: ${application.type}\nВид мебели: ${application.typeOfRestFurniture} ${application.typeOfNewFurniture}\n\nИмя пользователя: ${application.name}\nНомер пользователя: ${application.phone}\n\nСообщение от пользователя:\n${req.body.messageText}\n\nСкорее ответьте ему!
-            `)
-        ))
-
-
-        res.send({application_added: true})
+async function fillSpecializationsForUniversities(universities) {
+  for (let university of universities) {
+    if (Array.isArray(university.specializations) && university.specializations.length > 0) {
+      const specs = await pool.query(`
+        SELECT id, name
+        FROM specializations
+        WHERE id = ANY($1)
+      `, [university.specializations]);
+      university.specializations = specs.rows;
+    } else {
+      university.specializations = [];
     }
-
-    async createOrderToMattress(req, res) {
-        const application = {
-            name: req.body.name,
-            phone: req.body.phone,
-            type: req.body.type,
-            length: req.body.length,
-            width: req.body.width,
-            message: req.body.message,
-        }
-        console.log(req.body)
-        const tgAdmins = await db.query('SELECT id, chat_id, username FROM public.tg_admins;')
-
-
-        tgAdmins.rows.map(async (admin) => (
-            await bot.sendMessage(admin.chat_id,
-                `Новый заказ на матрасы!\n\nВыбранный матрас: ${application.type}\nШирина х Длина: ${application.width}см x ${application.length}см\n\nИмя пользователя: ${application.name}\nНомер пользователя: ${application.phone}\n\nСообщение от пользователя:\n${req.body.messageText}\n\nСкорее ответьте ему!
-            `)
-        ))
-
-
-        res.send({application_added: true})
-    }
-
-    async createNewApplicationToConsultation(req, res) {
-        const application = {
-            name: req.body.name,
-            phone: req.body.phone,
-        }
-        console.log(req.body)
-        const tgAdmins = await db.query('SELECT id, chat_id, username FROM public.tg_admins;')
-
-
-        tgAdmins.rows.map(async (admin) => (
-            await bot.sendMessage(admin.chat_id,
-                `У клиента возникли вопросы!\n\nИмя пользователя: ${application.name}\nНомер пользователя: ${application.phone}\n\nСообщение от пользователя:\n${req.body.messageText}\n\nСкорее ответьте ему!
-            `)
-        ))
-
-
-        res.send({application_added: true})
-    }
+  }
+  return universities;
 }
 
-module.exports = new Controller();
+module.exports = {
+  getUniversities: async (req, res) => {
+    try {
+      const result = await pool.query(`
+        SELECT u.*, c.name AS country_name, ci.name AS city_name, l.name AS language_name 
+        FROM universities u 
+        LEFT JOIN countries c ON u.country_id = c.id 
+        LEFT JOIN cities ci ON u.city_id = ci.id 
+        LEFT JOIN languages l ON u.language_id = l.id
+      `);
+      const universities = await fillSpecializationsForUniversities(result.rows);
+      res.json(universities);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send('Server error');
+    }
+  },
+
+  getCountries: async (req, res) => {
+    try {
+      const result = await pool.query('SELECT * FROM countries');
+      res.json(result.rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send('Server error');
+    }
+  },
+
+  getSpecializations: async (req, res) => {
+    try {
+      const result = await pool.query('SELECT * FROM specializations');
+      res.json(result.rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send('Server error');
+    }
+  },
+
+  getUniversityById: async (req, res) => {
+    const { id } = req.body;
+    try {
+      const result = await pool.query(`
+        SELECT u.*, c.name AS country_name, ci.name AS city_name, l.name AS language_name 
+        FROM universities u 
+        LEFT JOIN countries c ON u.country_id = c.id 
+        LEFT JOIN cities ci ON u.city_id = ci.id 
+        LEFT JOIN languages l ON u.language_id = l.id 
+        WHERE u.id = $1
+      `, [id]);
+
+      if (result.rows.length === 0) return res.status(404).send('University not found');
+
+      const [university] = await fillSpecializationsForUniversities(result.rows);
+      res.json([university]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send('Server error');
+    }
+  },
+
+  createNewApplication: async (req, res) => {
+    const { name, phone, universityId } = req.body;
+    try {
+      await pool.query(
+        'INSERT INTO applications (name, phone, university_id, created_at) VALUES ($1, $2, $3, NOW())',
+        [name, phone, universityId || null]
+      );
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).send('Server error');
+    }
+  },
+
+  getUniversityByCountryId: async (req, res) => {
+    const { id } = req.body;
+    try {
+      const result = await pool.query(`
+        SELECT u.*, c.name AS country_name, ci.name AS city_name, l.name AS language_name 
+        FROM universities u 
+        LEFT JOIN countries c ON u.country_id = c.id 
+        LEFT JOIN cities ci ON u.city_id = ci.id 
+        LEFT JOIN languages l ON u.language_id = l.id 
+        WHERE u.country_id = $1
+      `, [id]);
+
+      const universities = await fillSpecializationsForUniversities(result.rows);
+      res.json(universities);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send('Server error');
+    }
+  },
+
+  getFilteredUniversities: async (req, res) => {
+    const { country_id, specialization_id, language_id, university_id } = req.body;
+
+    let query = `
+      SELECT DISTINCT u.*, c.name AS country_name, ci.name AS city_name, l.name AS language_name 
+      FROM universities u 
+      LEFT JOIN countries c ON u.country_id = c.id 
+      LEFT JOIN cities ci ON u.city_id = ci.id 
+      LEFT JOIN languages l ON u.language_id = l.id 
+      WHERE 1=1
+    `;
+    const params = [];
+    let index = 1;
+
+    if (country_id !== 0) {
+      query += ` AND u.country_id = $${index++}`;
+      params.push(country_id);
+    }
+    if (specialization_id !== 0) {
+      query += ` AND $${index} = ANY(u.specializations)`;
+      params.push(specialization_id);
+      index++;
+    }
+    if (language_id !== 0) {
+      query += ` AND u.language_id = $${index++}`;
+      params.push(language_id);
+    }
+    if (university_id !== 0) {
+      query += ` AND u.id = $${index++}`;
+      params.push(university_id);
+    }
+
+    try {
+      const result = await pool.query(query, params);
+      const universities = await fillSpecializationsForUniversities(result.rows);
+      res.json(universities);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send('Server error');
+    }
+  }
+};

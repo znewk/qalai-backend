@@ -1,0 +1,34 @@
+# Node modules
+node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor folders
+.idea/
+.vscode/
+
+# Build artifacts
+dist/
+build/
+coverage/
+
+# Database config (если когда-то добавишь)
+*.sqlite
+*.db
+
+# Optional:
+package-lock.json
+yarn.lock
